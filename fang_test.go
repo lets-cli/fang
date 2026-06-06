@@ -6,8 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"charm.land/fang/v2"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/lets-cli/fang"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
