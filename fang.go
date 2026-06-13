@@ -21,18 +21,29 @@ const shaLen = 7
 // ErrorHandler handles an error, printing them to the given [io.Writer].
 type ErrorHandler = func(w io.Writer, styles Styles, err error)
 
+// HelpContext contains styling and writer helpers for custom help rendering.
+type HelpContext struct {
+	Writer *colorprofile.Writer
+	Styles Styles
+	Width  int
+}
+
+// HelpRenderer renders command help using Fang styling primitives.
+type HelpRenderer func(cmd *cobra.Command, ctx HelpContext)
+
 // ColorSchemeFunc gets a [lipgloss.LightDarkFunc] and returns a [ColorScheme].
 type ColorSchemeFunc = func(lipgloss.LightDarkFunc) ColorScheme
 
 type settings struct {
-	completions bool
-	manpages    bool
-	skipVersion bool
-	version     string
-	commit      string
-	colorscheme ColorSchemeFunc
-	errHandler  ErrorHandler
-	signals     []os.Signal
+	completions  bool
+	manpages     bool
+	skipVersion  bool
+	version      string
+	commit       string
+	colorscheme  ColorSchemeFunc
+	errHandler   ErrorHandler
+	helpRenderer HelpRenderer
+	signals      []os.Signal
 }
 
 // Option changes fang settings.
@@ -98,6 +109,13 @@ func WithErrorHandler(handler ErrorHandler) Option {
 	}
 }
 
+// WithHelpRenderer sets a custom help renderer.
+func WithHelpRenderer(renderer HelpRenderer) Option {
+	return func(s *settings) {
+		s.helpRenderer = renderer
+	}
+}
+
 // WithNotifySignal sets the signals that should interrupt the execution of the
 // program.
 func WithNotifySignal(signals ...os.Signal) Option {
@@ -128,8 +146,16 @@ func Execute(ctx context.Context, root *cobra.Command, options ...Option) error 
 	}
 
 	helpFunc := func(c *cobra.Command, _ []string) {
-		w := colorprofile.NewWriter(c.OutOrStdout(), os.Environ())
-		helpFn(c, w, makeStyles(mustColorscheme(opts.colorscheme)))
+		helpCtx := HelpContext{
+			Writer: colorprofile.NewWriter(c.OutOrStdout(), os.Environ()),
+			Styles: makeStyles(mustColorscheme(opts.colorscheme)),
+			Width:  width(),
+		}
+		if opts.helpRenderer != nil {
+			opts.helpRenderer(c, helpCtx)
+			return
+		}
+		helpFn(c, helpCtx)
 	}
 
 	root.SilenceUsage = true

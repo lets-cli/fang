@@ -39,41 +39,41 @@ var width = sync.OnceValue(func() int {
 	return min(w, 120)
 })
 
-func helpFn(c *cobra.Command, w *colorprofile.Writer, styles Styles) {
-	writeLongShort(w, styles, cmp.Or(c.Long, c.Short))
-	usage := styleUsage(c, styles.Codeblock.Program, true)
-	examples := styleExamples(c, styles)
+func helpFn(c *cobra.Command, ctx HelpContext) {
+	writeLongShort(ctx.Writer, ctx.Styles, cmp.Or(c.Long, c.Short))
+	usage := StyleUsage(c, ctx.Styles.Codeblock.Program, true)
+	examples := StyleExamples(c, ctx.Styles)
 
-	padding := styles.Codeblock.Base.GetHorizontalPadding()
+	padding := ctx.Styles.Codeblock.Base.GetHorizontalPadding()
 	blockWidth := lipgloss.Width(usage)
 	for _, ex := range examples {
 		blockWidth = max(blockWidth, lipgloss.Width(ex))
 	}
-	blockWidth = min(width()-padding, blockWidth+padding)
-	blockStyle := styles.Codeblock.Base.Width(blockWidth)
+	blockWidth = min(ctx.Width-padding, blockWidth+padding)
+	blockStyle := ctx.Styles.Codeblock.Base.Width(blockWidth)
 
 	// if the color profile is ascii or notty, or if the block has no
 	// background color set, remove the vertical padding.
-	if w.Profile <= colorprofile.Ascii || reflect.DeepEqual(blockStyle.GetBackground(), lipgloss.NoColor{}) {
+	if ctx.Writer.Profile <= colorprofile.Ascii || reflect.DeepEqual(blockStyle.GetBackground(), lipgloss.NoColor{}) {
 		blockStyle = blockStyle.PaddingTop(0).PaddingBottom(0)
 	}
 
-	_, _ = fmt.Fprintln(w, styles.Title.Render("usage"))
-	_, _ = fmt.Fprintln(w, blockStyle.Render(usage))
+	_, _ = fmt.Fprintln(ctx.Writer, ctx.Styles.Title.Render("usage"))
+	_, _ = fmt.Fprintln(ctx.Writer, blockStyle.Render(usage))
 	if len(examples) > 0 {
 		cw := blockStyle.GetWidth() - blockStyle.GetHorizontalPadding()
-		_, _ = fmt.Fprintln(w, styles.Title.Render("examples"))
+		_, _ = fmt.Fprintln(ctx.Writer, ctx.Styles.Title.Render("examples"))
 		for i, example := range examples {
 			if lipgloss.Width(example) > cw {
 				examples[i] = ansi.Truncate(example, cw, "…")
 			}
 		}
-		_, _ = fmt.Fprintln(w, blockStyle.Render(strings.Join(examples, "\n")))
+		_, _ = fmt.Fprintln(ctx.Writer, blockStyle.Render(strings.Join(examples, "\n")))
 	}
 
 	groups, groupKeys := evalGroups(c)
-	cmds, cmdKeys := evalCmds(c, styles)
-	flags, flagKeys := evalFlags(c, styles)
+	cmds, cmdKeys := evalCmds(c, ctx.Styles)
+	flags, flagKeys := evalFlags(c, ctx.Styles)
 	space := calculateSpace(cmdKeys, flagKeys)
 
 	for _, groupID := range groupKeys {
@@ -81,7 +81,7 @@ func helpFn(c *cobra.Command, w *colorprofile.Writer, styles Styles) {
 		if len(group) == 0 {
 			continue
 		}
-		renderGroup(w, styles, space, groups[groupID], func(yield func(string, string) bool) {
+		renderGroup(ctx.Writer, ctx.Styles, space, groups[groupID], func(yield func(string, string) bool) {
 			for _, k := range cmdKeys {
 				cmds, ok := group[k]
 				if !ok {
@@ -95,7 +95,7 @@ func helpFn(c *cobra.Command, w *colorprofile.Writer, styles Styles) {
 	}
 
 	if len(flags) > 0 {
-		renderGroup(w, styles, space, "flags", func(yield func(string, string) bool) {
+		renderGroup(ctx.Writer, ctx.Styles, space, "flags", func(yield func(string, string) bool) {
 			for _, k := range flagKeys {
 				if !yield(k, flags[k]) {
 					return
@@ -104,7 +104,7 @@ func helpFn(c *cobra.Command, w *colorprofile.Writer, styles Styles) {
 		})
 	}
 
-	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(ctx.Writer)
 }
 
 // DefaultErrorHandler is the default [ErrorHandler] implementation.
@@ -159,8 +159,8 @@ func writeLongShort(w *colorprofile.Writer, styles Styles, longShort string) {
 
 var otherArgsRe = regexp.MustCompile(`(\[.*\])`)
 
-// styleUsage stylized styleUsage line for a given command.
-func styleUsage(c *cobra.Command, styles Program, complete bool) string {
+// StyleUsage stylizes a usage line for a given command.
+func StyleUsage(c *cobra.Command, styles Program, complete bool) string {
 	u := c.Use
 	if complete {
 		u = c.UseLine()
@@ -221,9 +221,8 @@ func styleUsage(c *cobra.Command, styles Program, complete bool) string {
 	return lipgloss.JoinHorizontal(lipgloss.Left, useLine...)
 }
 
-// styleExamples for a given command.
-// will print both the cmd.Use and cmd.Example bits.
-func styleExamples(c *cobra.Command, styles Styles) []string {
+// StyleExamples stylizes example lines for a given command.
+func StyleExamples(c *cobra.Command, styles Styles) []string {
 	if c.Example == "" {
 		return nil
 	}
@@ -424,7 +423,7 @@ func evalCmds(c *cobra.Command, styles Styles) (map[string](map[string]string), 
 		if _, ok := cmds[sc.GroupID]; !ok {
 			cmds[sc.GroupID] = map[string]string{}
 		}
-		key := padStyle.Render(styleUsage(sc, styles.Program, false))
+		key := padStyle.Render(StyleUsage(sc, styles.Program, false))
 		help := styles.FlagDescription.Render(sc.Short)
 		cmds[sc.GroupID][key] = help
 		keys = append(keys, key)
