@@ -367,3 +367,27 @@ func assertError(t *testing.T, err error, stdout, stderr bytes.Buffer) {
 	require.Error(t, err, stdout.String())
 	golden.RequireEqual(t, stderr.Bytes())
 }
+
+func TestWithHelpRenderer(t *testing.T) {
+	root := &cobra.Command{Use: "simple", Short: "Short help"}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"--help"})
+
+	called := false
+	err := fang.Execute(t.Context(), root, fang.WithHelpRenderer(func(cmd *cobra.Command, ctx fang.HelpContext) {
+		called = true
+		_, _ = fmt.Fprint(ctx.Writer, "custom help")
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected custom help renderer to be called")
+	}
+	if stdout.String() != "custom help" {
+		t.Fatalf("unexpected stdout: %q", stdout.String())
+	}
+}
